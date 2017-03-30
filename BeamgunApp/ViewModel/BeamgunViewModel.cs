@@ -13,6 +13,7 @@ namespace BeamgunApp.ViewModel
         void DoStealFocus();
         void Reset();
         void DisableUntil(DateTime minutes);
+        void ClearAlerts();
     }
 
     public class BeamgunViewModel : IDisposable, IViewModel
@@ -23,7 +24,9 @@ namespace BeamgunApp.ViewModel
         public ICommand LoseFocusCommand { get; }
         public ICommand ResetCommand { get; }
         public ICommand ExitCommand { get; }
+        public ICommand ClearAlertsCommand { get; }
         public Action StealFocus { get; set; }
+
         public bool IsVisible
         {
             get
@@ -38,12 +41,14 @@ namespace BeamgunApp.ViewModel
 
         public BeamgunViewModel()
         {
-            var beamgunSettings = new BeamgunSettings(new RegistryBackedDictionary());
+            var dictionary = new RegistryBackedDictionary();
+            var beamgunSettings = new BeamgunSettings(dictionary);
             BeamgunState = new BeamgunState(beamgunSettings)
             {
                 MainWindowVisibility = Visibility.Hidden
             };
             // TODO: This bi-directional relationship feels bad.
+            dictionary.BadCastReport += BeamgunState.AppendToAlert;
             BeamgunState.Disabler = new Disabler(BeamgunState);
             BeamgunState.Disabler.Enable(); 
             DisableCommand = new DisableCommand(this, beamgunSettings);
@@ -51,16 +56,19 @@ namespace BeamgunApp.ViewModel
             LoseFocusCommand = new DeactivatedCommand(this);
             ResetCommand = new ResetCommand(this);
             ExitCommand = new ExitCommand(this);
+            ClearAlertsCommand = new ClearAlertsCommand(this);
             _keystrokeHooker = InstallKeystrokeHooker();
             _usbStorageGuard = InstallUsbStorageGuard(beamgunSettings);
             _alarm = InstallAlarm(beamgunSettings);
             _networkWatcher = new NetworkWatcher(beamgunSettings,
+                new NetworkAdapterDisabler(),
                 x => BeamgunState.AppendToAlert(x),
                 x =>
                 {
                     _alarm.Trigger(x);
                     BeamgunState.SetGraphicsLanAlert();
-                });
+                },
+                () => BeamgunState.Disabler.IsDisabled);
             _keyboardWatcher = new KeyboardWatcher(beamgunSettings, 
                 new WorkstationLocker(), 
                 x => BeamgunState.AppendToAlert(x),
@@ -68,9 +76,11 @@ namespace BeamgunApp.ViewModel
                 {
                     _alarm.Trigger(x);
                     BeamgunState.SetGraphicsKeyboardAlert();
-                });
-            _updateTimer = new VersionCheckerTimer(beamgunSettings, 
-                new VersionChecker(), 
+                },
+                () => BeamgunState.Disabler.IsDisabled);
+            var checker = new VersionChecker();
+            _updateTimer = new VersionCheckerTimer(beamgunSettings,
+                checker, 
                 x => BeamgunState.AppendToAlert(x) );
         }
         
@@ -120,20 +130,21 @@ namespace BeamgunApp.ViewModel
             };
             return keystrokeHooker;
         }
-
         public void DoStealFocus()
         {
-            if (BeamgunState.StealFocus)
-            {
-                StealFocus();
-            }
+            StealFocus();
         }
-
         public void DisableUntil(DateTime time)
         {
             BeamgunState.Disabler.DisableUntil(time);
         }
-        
+
+        public void ClearAlerts()
+        {
+            BeamgunState.AlertLog = "";
+            BeamgunState.AppendToAlert("Log cleared.");
+        }
+
         public void Dispose()
         {
             _keystrokeHooker?.Dispose();
@@ -149,6 +160,7 @@ namespace BeamgunApp.ViewModel
             BeamgunState.AppendToAlert("Resetting alarm.");
             BeamgunState.Disabler.Enable();
             _alarm.Reset();
+            _networkWatcher.Triggered = false;
         }
 
         private readonly KeystrokeHooker _keystrokeHooker;

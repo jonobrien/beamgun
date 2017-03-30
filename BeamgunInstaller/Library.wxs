@@ -13,7 +13,7 @@
   <Product Id="*"
            Name="Beamgun"
            Language="1033"
-           Version="0.2.0.0"
+           Version="0.2.3.0"
            Manufacturer="Josh Lospinoso"
            UpgradeCode="662c6713-7850-4572-a794-b1c596d81908">
     <Package Compressed="yes"
@@ -27,7 +27,7 @@
     <Property Id="WixShellExecTarget" Value="[#BeamgunApp]" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Beamgun" />
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1"/>
-    <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Impersonate="no" />
+    <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec"/>
 
     <UI>
         <UIRef Id="WixUI_Minimal" />
